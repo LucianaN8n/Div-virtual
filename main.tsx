@@ -25,7 +25,13 @@ async function buscarPacientes() {
 
 type Msg={role:'user'|'assistant',content:string};type Mode='local'|'guided';
 function App(){const[chosen,setChosen]=useState(cases[0]);const[mode,setMode]=useState<Mode>('guided');const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const engine=useRef<any>(null);const[assessment,setAssessment]=useState<any>(null);const[loading,setLoading]=useState(false);
-const supported=typeof navigator!=='undefined'&&!!(navigator as any).gpu;
+const [pacientesBanco, setPacientesBanco] = useState<PacienteBanco[]>([]);React.useEffect(() => {
+  buscarPacientes().then((pacientes) => {
+    setPacientesBanco(pacientes);
+    console.log('Pacientes carregados:', pacientes.length);
+  });
+}, []);
+               const supported=typeof navigator!=='undefined'&&!!(navigator as any).gpu;
 async function activateLocal(){if(!supported){setStatus('WebGPU indisponível neste navegador. Use o modo guiado.');return;}setLoading(true);setStatus('Preparando IA local; o primeiro download pode ser grande...');try{engine.current=await CreateMLCEngine('Llama-3.2-1B-Instruct-q4f16_1-MLC',{initProgressCallback:(p:any)=>setStatus(p.text||'Carregando modelo...')});setMode('local');setStatus('IA local pronta. Conversas processadas neste aparelho.');}catch(e){setStatus('Não foi possível iniciar a IA local. Modo guiado disponível.');setMode('guided');}finally{setLoading(false)}}
 function start(){setMsgs([{role:'assistant',content:`Olá... meu nome é ${chosen.name}. Não sei muito bem por onde começar, mas acho que preciso conversar com alguém.`}]);setAssessment(null);setSession(true)}
 function guidedReply(text:string,count:number){const t=text.toLowerCase();if(/suic|morrer|me matar|automutil|risco imediato/.test(t))return 'É um assunto delicado... estou com receio de falar sobre isso. [Cenário pedagógico: avalie risco, acolha e procure supervisão; este simulador não atende emergências.]';if(/como (você|voce) (se sente|está)|o que sente|sentindo|sentimento/.test(t))return count<3?'Acho que estou cansada de tentar parecer forte o tempo inteiro.':'Fico com medo de não ser suficiente para as pessoas que amo.';if(/quando|desde quando|começou|primeira vez/.test(t))return 'Percebi isso mais claramente nos últimos meses, mas talvez já aconteça há anos.';if(/família|familia|mãe|pai|infância|infancia/.test(t))return 'Na minha família, demonstrar fraqueza nunca foi muito bem recebido.';if(/obrigad|encerrar|terminar|próxima sessão/.test(t))return 'Obrigada por me ouvir. Acho que consegui colocar algumas coisas em palavras.';return ['Não tinha pensado por esse lado... pode me ajudar a entender melhor?','É difícil falar disso. Às vezes sinto que ninguém realmente me escuta.','Talvez eu esteja evitando olhar para o que mais me incomoda.'][count%3]}
