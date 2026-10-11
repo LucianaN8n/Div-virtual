@@ -1,6 +1,28 @@
 import React,{useState,useRef} from 'react';import{createRoot}from'react-dom/client';import{CreateMLCEngine}from '@mlc-ai/web-llm';import './style.css';
 import { supabase } from './supabase';
 const cases=[{id:'ansiedade',name:'Marina',age:32,topic:'Ansiedade e autocobrança',background:'Marina, 32 anos, trabalha com gestão e sente pressão constante para não decepcionar ninguém. Relata insônia e preocupação excessiva. Não revele toda a história de uma vez.'},{id:'luto',name:'Roberto',age:48,topic:'Luto e mudanças',background:'Roberto, 48 anos, perdeu o pai há oito meses, evita falar da perda e se sente culpado por ter se afastado antes do falecimento. Não revele tudo de uma vez.'},{id:'vinculos',name:'Camila',age:27,topic:'Relacionamentos e limites',background:'Camila, 27 anos, relata dificuldade em dizer não, medo de abandono e relacionamentos com muita dependência emocional. Não revele tudo de uma vez.'}];
+
+type PacienteBanco = {
+  id: string;
+  codigo: string;
+  nome_ficticio: string;
+  idade: number;
+  area: string;
+};
+
+async function buscarPacientes() {
+  const { data, error } = await supabase
+    .from('pacientes')
+    .select('id, codigo, nome_ficticio, idade, area');
+
+  if (error) {
+    console.error('Erro ao buscar pacientes:', error.message);
+    return [];
+  }
+
+  return (data ?? []) as PacienteBanco[];
+}
+
 type Msg={role:'user'|'assistant',content:string};type Mode='local'|'guided';
 function App(){const[chosen,setChosen]=useState(cases[0]);const[mode,setMode]=useState<Mode>('guided');const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const engine=useRef<any>(null);const[assessment,setAssessment]=useState<any>(null);const[loading,setLoading]=useState(false);
 const supported=typeof navigator!=='undefined'&&!!(navigator as any).gpu;
