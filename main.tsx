@@ -23,8 +23,11 @@ async function buscarPacientes() {
   return (data ?? []) as PacienteBanco[];
 }
 
-type Msg={role:'user'|'assistant',content:string};type Mode='gemini'|'guided';
-function App(){const[chosen,setChosen]=useState(casosDemonstracao[0]);const[mode,setMode]=useState<Mode>('gemini');const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const[assessment,setAssessment]=useState<any>(null);
+type Msg={role:'user'|'assistant',content:string};
+function App(){const[chosen,setChosen]=useState(casosDemonstracao[0]);const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const[assessment,setAssessment]=useState<any>(null);
+const [ajuda,setAjuda]=useState('');
+const [carregandoAjuda,setCarregandoAjuda]=useState(false);
+const [mostrarAjuda,setMostrarAjuda]=useState(false);
 const [pacientesBanco, setPacientesBanco] = useState<PacienteBanco[]>([]);
 const cases = pacientesBanco.length ? pacientesBanco.map(p => ({
  id:p.id, name:p.nome_ficticio, age:p.idade, topic:p.area || 'Caso clínico',
@@ -106,7 +109,7 @@ function historiaPaciente(nome:string, area:string):Historia {
   abertura:'Queria compreender por que sou tão duro comigo mesmo.'};
 }
 function aberturaPaciente(nome:string,area:string){const h=historiaPaciente(nome,area);return `Olá, meu nome é ${nome}. ${h.motivo} Não sei muito bem por onde começar, mas achei importante vir conversar.`}
-function start(){setStatus(mode==='gemini'?'Sessão de teste com Gemini iniciada.':'Sessão de treinamento narrativo iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setSession(true)}
+function start(){setStatus('Sessão de treinamento iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setAjuda('');setMostrarAjuda(false);setSession(true)}
 function guidedReply(text:string,count:number){
  const t=text.toLocaleLowerCase('pt-BR');const h=historiaPaciente(chosen.name,chosen.topic);
  if(/suic|me matar|automutil|tirar minha vida|risco imediato/.test(t))return 'É difícil falar disso. [Orientação pedagógica: interrompa a simulação para avaliar risco, priorizar segurança e procurar supervisão e serviços humanos apropriados. Este simulador não atende emergências.]';
@@ -134,26 +137,21 @@ async function send(){
   const next:Msg[]=[...msgs,{role:'user',content:mensagem}];
   setMsgs(next);setInput('');setBusy(true);setStatus('Paciente elaborando resposta...');
   try{
-    let reply:string;
-    if(mode==='gemini'){
-      const response=await fetch('/.netlify/functions/gemini',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic,historia:chosen.background},
-          mensagens:next.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))
-        })
-      });
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||typeof data.resposta!=='string'||!data.resposta.trim()){
-        throw new Error(response.status===429?'Limite de uso do Gemini atingido. Tente novamente mais tarde.':data.error||`Erro HTTP ${response.status}`);
-      }
-      reply=data.resposta.trim();
-    }else{
-      reply=guidedReply(mensagem,next.filter(m=>m.role==='user').length);
+    const response=await fetch('/.netlify/functions/gemini',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic,historia:chosen.background},
+        mensagens:next.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))
+      })
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||typeof data.resposta!=='string'||!data.resposta.trim()){
+      throw new Error(response.status===429?'Limite de uso do Gemini atingido. Tente novamente mais tarde.':data.error||`Erro HTTP ${response.status}`);
     }
+    const reply=data.resposta.trim();
     setMsgs(v=>[...v,{role:'assistant',content:reply}]);
-    setStatus(mode==='gemini'?'Resposta recebida do Gemini.':'Resposta do cenário narrativo.');
+    setStatus('Resposta da paciente recebida.');setAjuda('');setMostrarAjuda(false);
   }catch(error){
     const detalhe=error instanceof Error?error.message:'Falha de conexão';
     setStatus(`A IA não respondeu: ${detalhe}. Sua mensagem permanece no histórico; tente novamente.`);
@@ -162,7 +160,30 @@ async function send(){
     setInput(mensagem);
   }finally{setBusy(false)}
 }
+async function pedirAjuda(){
+  if(!session||busy||carregandoAjuda)return;
+  if(mostrarAjuda){setMostrarAjuda(false);return;}
+  setMostrarAjuda(true);
+  if(ajuda)return;
+  setCarregandoAjuda(true);
+  try{
+    const response=await fetch('/.netlify/functions/ajuda',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic},
+        mensagens:msgs.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))
+      })
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok||typeof data.orientacao!=='string'||!data.orientacao.trim()){
+      throw new Error(data.error||`Erro HTTP ${response.status}`);
+    }
+    setAjuda(data.orientacao.trim());
+  }catch(error){
+    setAjuda('Não foi possível carregar a orientação agora. Feche e abra a ajuda para tentar novamente.');
+  }finally{setCarregandoAjuda(false)}
+}
 function evaluate(){const u=msgs.filter(m=>m.role==='user').map(m=>m.content);const joined=u.join(' ').toLowerCase();const questions=u.filter(x=>x.includes('?')).length;const words=u.join(' ').trim().split(/\s+/).filter(Boolean).length;const scores=[Math.min(10,2+u.length*.6+(joined.match(/entendo|imagino|acolh|obrigad|escut|compreendo/g)||[]).length),Math.min(10,2+questions*1.2),Math.min(10,2+(joined.match(/quando|como|o que|percebe|sent|história|historia|relação|relacao/g)||[]).length*.8),Math.min(10,5+(joined.match(/respeit|limite|consent|sigilo|seguran/g)||[]).length),Math.min(10,2+(joined.match(/encerrar|próxima|proxima|retomar|resum|obrigad/g)||[]).length*1.5)];const weights=[.25,.2,.25,.2,.1];const value=scores.reduce((a,s,i)=>a+s*weights[i],0);setAssessment({scores:scores.map(x=>Math.round(x*10)/10),value:Math.round(value*10)/10,turns:u.length,words});}
-function download(){if(!assessment)return;const report={tipo:'RELATÓRIO DE TREINO — NÃO É NOTA OFICIAL',caso:chosen.topic,modo:mode,data:new Date().toISOString(),resultado:assessment,transcricao:msgs,observacao:'Pontuação heurística ilustrativa. Não substitui avaliação humana. Registro local não é verificável.'};const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='diva-virtual-treino.json';a.click();URL.revokeObjectURL(url)}
-return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual <span>2.0</span></h1><p>Laboratório de Prática Clínica Simulada</p></div></header><div className="warning">Versão piloto de treinamento. Não utilize dados de pacientes reais. A avaliação exibida é apenas demonstrativa e não vale como nota acadêmica.</div><section className="layout"><aside className="panel"><h2>Seu treinamento</h2><label>Caso clínico</label><select value={chosen.id} disabled={session} onChange={e=>setChosen(cases.find(c=>c.id===e.target.value) || cases[0])}>{cases.map(c=><option key={c.id} value={c.id}>{c.topic} — {c.name}</option>)}</select><p className="muted">Paciente fictício: {chosen.name}, {chosen.age} anos</p><h3>Modo de atendimento</h3><button className={mode==='gemini'?'selected':''} onClick={()=>setMode('gemini')} disabled={busy||session}>Conversar com IA (Gemini)</button><button className={mode==='guided'?'selected':''} onClick={()=>setMode('guided')} disabled={busy||session}>Cenários narrativos · sem IA</button><p className="status">{status}</p><button className="gold" onClick={start}>{session?'Reiniciar sessão':'Iniciar sessão'}</button><div className="separator"/><h3>Privacidade</h3><p className="muted">As mensagens são enviadas ao Gemini quando o modo IA está ativo. Não utilize dados de pessoas reais. Nesta versão não há login, créditos, cronômetro nem registro oficial de notas.</p></aside><section className="panel chat"><div className="chathead"><div><h2>Consultório simulado</h2><p className="muted">{chosen.name} · {chosen.topic}</p></div><span className="pill">{mode==='gemini'?'Gemini':'Narrativo'}</span></div><div className="messages">{!session?<div className="empty">Escolha um caso e clique em “Iniciar sessão” para começar a prática.</div>:msgs.map((m,i)=><div className={'bubble '+(m.role==='user'?'mine':'patient')} key={i}><small>{m.role==='user'?'Terapeuta (aluno)':chosen.name}</small>{m.content}</div>)}{busy&&<p className="muted">Paciente elaborando resposta...</p>}</div><div className="composer"><textarea placeholder="Escreva sua intervenção clínica..." value={input} disabled={!session||busy} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}/><button className="gold" onClick={send} disabled={!session||busy||!input.trim()}>Enviar</button></div><div className="footer"><button onClick={evaluate} disabled={!session||busy||msgs.length<3}>Analisar treino</button><span className="muted">Pressione Enter para enviar</span></div></section></section>{assessment&&<section className="panel result"><h2>Feedback preliminar do treino</h2><p className="warning">Pontuação ilustrativa baseada em regras simples. Não é uma avaliação clínica validada nem pode compor a nota oficial.</p><div className="score">{assessment.value.toFixed(1)} <small>/ 10</small></div><div className="metrics">{['Acolhimento','Perguntas','Investigação','Ética','Encerramento'].map((label,i)=><div key={label}><span>{label}</span><strong>{assessment.scores[i].toFixed(1)}</strong></div>)}</div><p>Intervenções realizadas: {assessment.turns}. Revise suas perguntas, a escuta e o fechamento da sessão para identificar oportunidades de aprimoramento.</p><button onClick={download}>Exportar registro de treino (JSON)</button></section>}<footer>Instituto Saber Consciente · Protótipo educacional com pacientes fictícios · Não é atendimento clínico real</footer></main>}
+function download(){if(!assessment)return;const report={tipo:'RELATÓRIO DE TREINO — NÃO É NOTA OFICIAL',caso:chosen.topic,modo:'simulação com IA',data:new Date().toISOString(),resultado:assessment,transcricao:msgs,observacao:'Pontuação heurística ilustrativa. Não substitui avaliação humana. Registro local não é verificável.'};const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='diva-virtual-treino.json';a.click();URL.revokeObjectURL(url)}
+return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual <span>2.0</span></h1><p>Laboratório de Prática Clínica Simulada</p></div></header><div className="warning">Versão piloto de treinamento. Não utilize dados de pacientes reais. A avaliação exibida é apenas demonstrativa e não vale como nota acadêmica.</div><section className="layout"><aside className="panel"><h2>Seu treinamento</h2><label>Caso clínico</label><select value={chosen.id} disabled={session} onChange={e=>setChosen(cases.find(c=>c.id===e.target.value) || cases[0])}>{cases.map(c=><option key={c.id} value={c.id}>{c.topic} — {c.name}</option>)}</select><p className="muted">Paciente fictício: {chosen.name}, {chosen.age} anos</p><p className="status">{status}</p><button className="gold" onClick={start}>{session?'Reiniciar sessão':'Iniciar sessão'}</button><div className="separator"/><h3>Privacidade</h3><p className="muted">As mensagens da simulação e os pedidos de ajuda são processados por IA. Não utilize dados de pessoas reais. Nesta versão não há login, créditos, cronômetro nem registro oficial de notas.</p></aside><section className="panel chat"><div className="chathead"><div><h2>Consultório simulado</h2><p className="muted">{chosen.name} · {chosen.topic}</p></div></div><div className="messages">{!session?<div className="empty">Escolha um caso e clique em “Iniciar sessão” para começar a prática.</div>:msgs.map((m,i)=><div className={'bubble '+(m.role==='user'?'mine':'patient')} key={i}><small>{m.role==='user'?'Terapeuta (aluno)':chosen.name}</small>{m.content}</div>)}{busy&&<p className="muted">Paciente elaborando resposta...</p>}</div><div className="composer"><textarea placeholder="Escreva sua intervenção clínica..." value={input} disabled={!session||busy} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}/><button className="gold" onClick={send} disabled={!session||busy||!input.trim()}>Enviar</button></div>{session&&<div style={{marginTop:12,marginBottom:12}}><button type="button" onClick={pedirAjuda} disabled={busy||carregandoAjuda} style={{border:'1px solid #cfa958',borderRadius:9,padding:'11px 16px',color:'#f1d18b',background:'#162d4b',cursor:'pointer'}}>💡 {carregandoAjuda?'Preparando orientação...':mostrarAjuda?'Fechar ajuda':'Preciso de ajuda'}</button>{mostrarAjuda&&<div style={{marginTop:12,padding:18,border:'1px solid #a98b51',borderRadius:12,background:'#142b49',color:'#f1f5fb',whiteSpace:'pre-wrap',lineHeight:1.65}}><strong style={{color:'#e6bd67'}}>Orientação ao aluno — não enviada à paciente</strong><div style={{marginTop:10}}>{carregandoAjuda?'Analisando o momento da conversa...':ajuda}</div></div>}</div>}<div className="footer"><button onClick={evaluate} disabled={!session||busy||msgs.length<3}>Analisar treino</button><span className="muted">Pressione Enter para enviar</span></div></section></section>{assessment&&<section className="panel result"><h2>Feedback preliminar do treino</h2><p className="warning">Pontuação ilustrativa baseada em regras simples. Não é uma avaliação clínica validada nem pode compor a nota oficial.</p><div className="score">{assessment.value.toFixed(1)} <small>/ 10</small></div><div className="metrics">{['Acolhimento','Perguntas','Investigação','Ética','Encerramento'].map((label,i)=><div key={label}><span>{label}</span><strong>{assessment.scores[i].toFixed(1)}</strong></div>)}</div><p>Intervenções realizadas: {assessment.turns}. Revise suas perguntas, a escuta e o fechamento da sessão para identificar oportunidades de aprimoramento.</p><button onClick={download}>Exportar registro de treino (JSON)</button></section>}<footer>Instituto Saber Consciente · Protótipo educacional com pacientes fictícios · Não é atendimento clínico real</footer></main>}
 createRoot(document.getElementById('root')!).render(<App/>);
