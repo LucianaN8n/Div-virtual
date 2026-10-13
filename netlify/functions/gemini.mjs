@@ -153,6 +153,26 @@ REGRAS:
       return responder(502, { error: "A IA não retornou uma resposta." });
     }
 
+    // Persistir o par de mensagens vinculado ao atendimento autenticado.
+    // O registro é realizado no servidor, nunca com um aluno_id enviado pelo navegador.
+    const ultimaIntervencao = mensagens.at(-1)?.texto;
+    if (typeof ultimaIntervencao !== "string" || !ultimaIntervencao.trim() ||
+        ultimaIntervencao.length > 2000) {
+      return responder(400, { error: "Intervenção inválida para registro." });
+    }
+
+    const { error: erroRegistro } = await banco.from("mensagens").insert([
+      { atendimento_id, papel: "aluno", texto: ultimaIntervencao.trim() },
+      { atendimento_id, papel: "paciente", texto }
+    ]);
+
+    if (erroRegistro) {
+      console.error("Falha ao registrar mensagens:", erroRegistro.message);
+      return responder(500, {
+        error: "A resposta foi gerada, mas não foi possível salvar o histórico. Não continue esta sessão antes de verificar o registro."
+      });
+    }
+
     return responder(200, { resposta: texto });
   } catch (erro) {
     console.error("Erro na função:", erro);
