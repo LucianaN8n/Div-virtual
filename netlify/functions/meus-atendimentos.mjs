@@ -64,7 +64,14 @@ export default async function handler(request) {
       ]);
       if (messagesResult.error) throw messagesResult.error;
       if (patientResult.error) throw patientResult.error;
+      const { data: evaluation, error: evaluationError } = await db
+        .from("avaliacoes")
+        .select("nota, criterios, feedback, avaliador, criado_em")
+        .eq("atendimento_id", attendance.id)
+        .maybeSingle();
+      if (evaluationError) throw evaluationError;
       return json(200, {
+        avaliacao: evaluation,
         atendimento: attendance,
         paciente: patientResult.data,
         mensagens: messagesResult.data || [],
