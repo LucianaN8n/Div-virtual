@@ -87,10 +87,26 @@ export default async function handler(request) {
       });
     }
 
-    const { data: resultado, error: erroConsumo } = await banco.rpc(
-      "consumir_sessao",
-      { p_assinatura_id: assinatura.id }
-    );
+ const corpo = await request.json().catch(() => ({}));
+const pacienteId = corpo.paciente_id;
+
+if (
+  typeof pacienteId !== "string" ||
+  !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pacienteId)
+) {
+  return responder(400, {
+    erro: "Selecione um paciente válido para iniciar."
+  });
+}
+
+const { data: resultado, error: erroConsumo } = await banco.rpc(
+  "iniciar_atendimento",
+  {
+    p_aluno_id: usuario.user.id,
+    p_paciente_id: pacienteId,
+    p_assinatura_id: assinatura.id
+  }
+);
 
     if (erroConsumo) {
       console.error("Erro ao consumir sessão:", erroConsumo.message);
