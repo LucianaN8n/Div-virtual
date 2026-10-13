@@ -34,7 +34,15 @@ if (!hottok || !process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SECRET_KE
 
   const dados = evento.data || {};
   const produtoId = String(dados.product?.id ?? "");
-
+console.log("Diagnóstico Hotmart:", {
+  evento: evento.event,
+  produtoId,
+  camposAssinatura: Object.keys(dados.subscription || {}),
+  camposPlano: Object.keys(dados.subscription?.plan || {}),
+  camposAssinante: Object.keys(dados.subscription?.subscriber || {}),
+  possuiIdEvento: Boolean(evento.id),
+  possuiTransacao: Boolean(dados.purchase?.transaction)
+});
   if (produtoId !== PRODUTO_ID) {
     return Response.json({ ignorado: true, motivo: "Outro produto" });
   }
