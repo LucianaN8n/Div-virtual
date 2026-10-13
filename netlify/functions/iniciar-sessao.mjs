@@ -115,7 +115,7 @@ const { data: resultado, error: erroConsumo } = await banco.rpc(
       });
     }
 
-    if (resultado !== true) {
+    if (!Array.isArray(resultado) || !resultado[0]?.atendimento_id) {
       return responder(403, {
         erro: "Não há sessões disponíveis para iniciar."
       });
