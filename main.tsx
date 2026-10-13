@@ -289,9 +289,13 @@ async function pedirAjuda(){
   if(ajuda)return;
   setCarregandoAjuda(true);
   try{
+    if(!atendimentoId)throw new Error('Atendimento não identificado.');
+    const {data:{session:authSession}}=await supabase.auth.getSession();
+    if(!authSession)throw new Error('Faça login novamente.');
     const response=await fetch('/.netlify/functions/ajuda',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${authSession.access_token}`},
       body:JSON.stringify({
+        atendimento_id:atendimentoId,
         paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic},
         mensagens:msgs.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))
       })
