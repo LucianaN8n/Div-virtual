@@ -33,11 +33,13 @@ if (!hottok || !process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SECRET_KE
   }
 
   const dados = evento.data || {};
-  const produtoId = String(dados.product?.id ?? "");
+  const produtoId = String(dados.product?.id ?? dados.subscription?.product?.id ?? "");
 console.log("Diagnóstico Hotmart:", {
   evento: evento.event,
   produtoId,
   camposAssinatura: Object.keys(dados.subscription || {}),
+  camposProdutoAssinatura: Object.keys(dados.subscription?.product || {}),
+  idProdutoAssinatura: String(dados.subscription?.product?.id ?? ""),
   camposPlano: Object.keys(dados.subscription?.plan || {}),
   camposAssinante: Object.keys(dados.subscription?.subscriber || {}),
   possuiIdEvento: Boolean(evento.id),
