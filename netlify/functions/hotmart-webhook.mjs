@@ -56,7 +56,7 @@ console.log("Diagnóstico Hotmart:", {
   const email = dados.buyer?.email?.trim().toLowerCase();
   const transacao = dados.purchase?.transaction;
   const assinaturaCodigo = dados.subscription?.subscriber?.code;
-const dataVencimento = dados.subscription?.date_next_charge ?? null;
+const dataVencimento = dados.subscription?.date_next_charge ?? dados.purchase?.date_next_charge ?? null;
 console.log("Campo de vencimento presente:", Boolean(dataVencimento));
   if (!eventoId || !tipo) {
     return new Response("Evento sem identificação", { status: 422 });
