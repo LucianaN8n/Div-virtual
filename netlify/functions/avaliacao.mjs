@@ -1,9 +1,54 @@
+import { createClient } from '@supabase/supabase-js';
 export default async (request) => {
   if (request.method !== 'POST') return Response.json({ error: 'Método não permitido.' }, { status: 405 });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: 'Chave de IA não configurada.' }, { status: 503 });
   try {
-    const { paciente, mensagens } = await request.json();
+    const autorizacao = request.headers.get('authorization') || '';
+    if (!autorizacao.startsWith('Bearer ')) {
+      return Response.json({ error: 'Faça login para solicitar avaliação.' }, { status: 401 });
+    }
+    const url = process.env.VITE_SUPABASE_URL;
+    const publica = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const secreta = process.env.SUPABASE_SECRET_KEY;
+    if (!url || !publica || !secreta) {
+      return Response.json({ error: 'Configuração de autenticação incompleta.' }, { status: 500 });
+    }
+    const auth = createClient(url, publica, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: autenticacao, error: erroAuth } = await auth.auth.getUser(autorizacao.slice(7).trim());
+    if (erroAuth || !autenticacao?.user?.id) {
+      return Response.json({ error: 'Login inválido ou expirado.' }, { status: 401 });
+    }
+    const corpo = await request.json().catch(() => ({}));
+    const { mensagens, atendimento_id } = corpo;
+    if (typeof atendimento_id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atendimento_id)) {
+      return Response.json({ error: 'Atendimento não autorizado.' }, { status: 403 });
+    }
+    const banco = createClient(url, secreta, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: atendimento, error: erroAtendimento } = await banco
+      .from('atendimentos')
+      .select('id, aluno_id, paciente_id, iniciado_em, status')
+      .eq('id', atendimento_id)
+      .eq('aluno_id', autenticacao.user.id)
+      .maybeSingle();
+    if (erroAtendimento) {
+      console.error('Erro ao consultar atendimento:', erroAtendimento.message);
+      return Response.json({ error: 'Não foi possível verificar o atendimento.' }, { status: 500 });
+    }
+    if (!atendimento || !['iniciado', 'finalizado', 'avaliado'].includes(atendimento.status) ||
+      !Number.isFinite(Date.parse(atendimento.iniciado_em))) {
+      return Response.json({ error: 'Atendimento inexistente ou não autorizado.' }, { status: 403 });
+    }
+    const { data: perfil, error: erroPerfil } = await banco
+      .from('pacientes')
+      .select('nome_ficticio, idade, area')
+      .eq('id', atendimento.paciente_id)
+      .maybeSingle();
+    if (erroPerfil || !perfil) {
+      return Response.json({ error: 'Não foi possível carregar o paciente.' }, { status: 500 });
+    }
+    const paciente = { nome: perfil.nome_ficticio, idade: perfil.idade, titulo: perfil.area };
     if (!paciente || !Array.isArray(mensagens) || mensagens.length < 2 || mensagens.length > 120 || !mensagens.some(m => m.papel === 'aluno')) {
       return Response.json({ error: 'Sessão inválida ou sem intervenções do aluno.' }, { status: 400 });
     }
