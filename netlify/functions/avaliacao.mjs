@@ -74,7 +74,30 @@ TRANSCRIÇÃO:\n${transcricao}`;
       return Response.json({ error: 'A IA produziu um relatório incompleto.' }, { status: 502 });
     }
     avaliacao.notaGeral = Math.round(avaliacao.criterios.reduce((sum,c) => sum + Number(c.nota), 0) * 2) / 10;
-    return Response.json({ avaliacao });
+    const { data: existente, error: erroConsulta } = await banco.from('avaliacoes')
+      .select('id, criterios, nota, feedback')
+      .eq('atendimento_id', atendimento_id)
+      .maybeSingle();
+    if (erroConsulta) {
+      console.error('Erro ao consultar avaliação:', erroConsulta.message);
+      return Response.json({ error: 'Não foi possível verificar o registro da avaliação.' }, { status: 500 });
+    }
+    if (!existente) {
+      const { error: erroSalvar } = await banco.from('avaliacoes').insert({
+        id: crypto.randomUUID(),
+        atendimento_id,
+        nota: avaliacao.notaGeral,
+        criterios: avaliacao,
+        feedback: String(avaliacao.resumo || ''),
+        avaliador: 'IA - avaliação pedagógica',
+        criado_em: new Date().toISOString()
+      });
+      if (erroSalvar) {
+        console.error('Erro ao salvar avaliação:', erroSalvar.message);
+        return Response.json({ error: 'A avaliação foi gerada, mas não pôde ser salva. Tente novamente.' }, { status: 500 });
+      }
+    }
+    return Response.json({ avaliacao: existente?.criterios?.criterios ? existente.criterios : avaliacao });
   } catch (e) {
     console.error('Falha na avaliação:', e);
     return Response.json({ error: 'Falha ao gerar avaliação. Tente novamente.' }, { status: 500 });
