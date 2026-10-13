@@ -171,7 +171,32 @@ function historiaPaciente(nome:string, area:string):Historia {
   abertura:'Queria compreender por que sou tão duro comigo mesmo.'};
 }
 function aberturaPaciente(nome:string,area:string){const h=historiaPaciente(nome,area);return `Olá, meu nome é ${nome}. ${h.motivo} Não sei muito bem por onde começar, mas achei importante vir conversar.`}
-function start(){if(session&&!ended&&!tempoEsgotado&&!window.confirm('Reiniciar a sessão atual? O histórico desta sessão será substituído.'))return;const inicio=Date.now();setStartedAt(inicio);setAgora(inicio);setStatus('Sessão de treinamento iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setEnded(false);setAjuda('');setMostrarAjuda(false);setSession(true)}
+async function start(){if(session&&!ended&&!tempoEsgotado&&!window.confirm('Reiniciar a sessão atual? O histórico desta sessão será substituído.'))return;const { data: { session: authSession } } = await supabase.auth.getSession();
+
+if (!authSession) {
+  alert('Entre na sua conta para iniciar uma sessão.');
+  return;
+}
+
+try {
+  const resposta = await fetch('/.netlify/functions/iniciar-sessao', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authSession.access_token}`
+    }
+  });
+
+  const resultado = await resposta.json();
+
+  if (!resposta.ok || resultado.autorizado !== true) {
+    alert(resultado.erro || 'Não foi possível iniciar a sessão.');
+    return;
+  }
+} catch (erro) {
+  alert('Falha ao verificar sua assinatura. Tente novamente.');
+  return;
+}const inicio=Date.now();setStartedAt(inicio);setAgora(inicio);setStatus('Sessão de treinamento iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setEnded(false);setAjuda('');setMostrarAjuda(false);setSession(true)}
 function guidedReply(text:string,count:number){
  const t=text.toLocaleLowerCase('pt-BR');const h=historiaPaciente(chosen.name,chosen.topic);
  if(/suic|me matar|automutil|tirar minha vida|risco imediato/.test(t))return 'É difícil falar disso. [Orientação pedagógica: interrompa a simulação para avaliar risco, priorizar segurança e procurar supervisão e serviços humanos apropriados. Este simulador não atende emergências.]';
