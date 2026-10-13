@@ -313,9 +313,12 @@ async function evaluate(){
  if(!session||busy||assessing||msgs.filter(m=>m.role==='user').length===0)return;
  setAssessing(true);setStatus('Analisando as intervenções da sessão...');
  try{
+  if(!atendimentoId)throw new Error('Atendimento não identificado.');
+  const {data:{session:authSession}}=await supabase.auth.getSession();
+  if(!authSession)throw new Error('Faça login novamente.');
   const response=await fetch('/.netlify/functions/avaliacao',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic},
+   method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${authSession.access_token}`},
+   body:JSON.stringify({atendimento_id:atendimentoId,paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic},
     mensagens:msgs.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))})
   });
   const data=await response.json().catch(()=>({}));
