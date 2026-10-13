@@ -182,10 +182,12 @@ try {
   const resposta = await fetch('/.netlify/functions/iniciar-sessao', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authSession.access_token}`
-    }
-  });
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${authSession.access_token}`
+},
+body: JSON.stringify({
+  paciente_id: chosen.id
+})
 
   const resultado = await resposta.json();
 
