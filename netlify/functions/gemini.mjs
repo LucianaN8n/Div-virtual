@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 
 const headers = {
   "Content-Type": "application/json",
@@ -23,8 +24,58 @@ export default async function handler(request) {
       return responder(500, { error: "Chave Gemini não configurada." });
     }
 
-    const corpo = await request.json();
-    const { paciente, mensagens } = corpo;
+    const autorizacao = request.headers.get("authorization") || "";
+    if (!autorizacao.startsWith("Bearer ")) {
+      return responder(401, { error: "Entre na sua conta para conversar com o paciente." });
+    }
+    const token = autorizacao.slice(7).trim();
+    const url = process.env.VITE_SUPABASE_URL;
+    const publica = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const secreta = process.env.SUPABASE_SECRET_KEY;
+    if (!url || !publica || !secreta) {
+      return responder(500, { error: "Configuração de autenticação incompleta." });
+    }
+    const auth = createClient(url, publica, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: autenticacao, error: erroAuth } = await auth.auth.getUser(token);
+    if (erroAuth || !autenticacao?.user?.id) {
+      return responder(401, { error: "Login inválido ou expirado." });
+    }
+    const corpo = await request.json().catch(() => ({}));
+    const { mensagens, atendimento_id } = corpo;
+    if (typeof atendimento_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atendimento_id)) {
+      return responder(403, { error: "Atendimento não autorizado." });
+    }
+    const banco = createClient(url, secreta, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: atendimento, error: erroAtendimento } = await banco
+      .from("atendimentos")
+      .select("id, aluno_id, paciente_id, iniciado_em, status")
+      .eq("id", atendimento_id)
+      .eq("aluno_id", autenticacao.user.id)
+      .maybeSingle();
+    if (erroAtendimento) {
+      console.error("Erro ao verificar atendimento:", erroAtendimento.message);
+      return responder(500, { error: "Não foi possível verificar o atendimento." });
+    }
+    if (!atendimento || atendimento.status !== "iniciado" ||
+        !Number.isFinite(Date.parse(atendimento.iniciado_em)) ||
+        Date.now() >= Date.parse(atendimento.iniciado_em) + 30 * 60 * 1000) {
+      return responder(403, { error: "Sessão inexistente, encerrada ou com tempo esgotado." });
+    }
+    const { data: perfil, error: erroPaciente } = await banco
+      .from("pacientes")
+      .select("nome_ficticio, idade, area")
+      .eq("id", atendimento.paciente_id)
+      .maybeSingle();
+    if (erroPaciente || !perfil) {
+      return responder(500, { error: "Não foi possível carregar o paciente." });
+    }
+    const paciente = {
+      nome: perfil.nome_ficticio,
+      idade: perfil.idade,
+      titulo: perfil.area,
+      historia: `Paciente fictício ${perfil.nome_ficticio}, ${perfil.idade} anos. Área temática: ${perfil.area}. Revele sua história gradualmente.`
+    };
 
     if (!paciente || typeof paciente !== "object" || !Array.isArray(mensagens)) {
       return responder(400, { error: "Dados inválidos." });
