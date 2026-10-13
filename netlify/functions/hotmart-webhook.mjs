@@ -46,7 +46,8 @@ if (!hottok || !process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SECRET_KE
   const email = dados.buyer?.email?.trim().toLowerCase();
   const transacao = dados.purchase?.transaction;
   const assinaturaCodigo = dados.subscription?.subscriber?.code;
-
+const dataVencimento = dados.subscription?.date_next_charge ?? null;
+console.log("Campo de vencimento presente:", Boolean(dataVencimento));
   if (!eventoId || !tipo) {
     return new Response("Evento sem identificação", { status: 422 });
   }
@@ -89,7 +90,8 @@ if (!hottok || !process.env.VITE_SUPABASE_URL || !process.env.SUPABASE_SECRET_KE
         ? String(assinaturaCodigo)
         : null,
       p_email: email || null,
-      p_plano: plano?.nome || null
+p_plano: plano?.nome || null,
+p_data_vencimento: dataVencimento
     }
   );
 
