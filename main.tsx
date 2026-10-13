@@ -27,7 +27,7 @@ type Msg={role:'user'|'assistant',content:string};
 const SESSION_MS=30*60*1000;
 const STORAGE_KEY='diva-virtual-sessao-piloto-v2';
 const chaveSessao=(userId:string)=>`${STORAGE_KEY}-${userId}`;
-type SessaoSalva={chosenId:string;startedAt:number;ended:boolean;msgs:Msg[]};
+type SessaoSalva={chosenId:string;startedAt:number;ended:boolean;msgs:Msg[];atendimentoId?:string};
 function lerSessao(userId:string):SessaoSalva|null{
  try{const raw=localStorage.getItem(chaveSessao(userId));if(!raw)return null;const s=JSON.parse(raw);
  if(typeof s.startedAt!=='number'||!Array.isArray(s.msgs)||typeof s.chosenId!=='string')return null;
@@ -65,13 +65,14 @@ const [carregandoAjuda,setCarregandoAjuda]=useState(false);
 const [mostrarAjuda,setMostrarAjuda]=useState(false);
 const [pacientesBanco, setPacientesBanco] = useState<PacienteBanco[]>([]);
 const [startedAt,setStartedAt]=useState<number|null>(null);
+const [atendimentoId,setAtendimentoId]=useState<string|null>(null);
 const [agora,setAgora]=useState(Date.now());
 const restante=startedAt===null?SESSION_MS:Math.max(0,SESSION_MS-(agora-startedAt));
 const tempoEsgotado=Boolean(session&&startedAt!==null&&restante===0);
 const sessaoEncerrada=ended||tempoEsgotado;
 React.useEffect(()=>{
  const salvo=lerSessao(userId);if(!salvo)return;
- setStartedAt(salvo.startedAt);setMsgs(salvo.msgs);setSession(true);
+ setStartedAt(salvo.startedAt);setAtendimentoId(salvo.atendimentoId||null);setMsgs(salvo.msgs);setSession(true);
  setEnded(salvo.ended||Date.now()-salvo.startedAt>=SESSION_MS);
  setStatus(salvo.ended?'Sessão encerrada.':Date.now()-salvo.startedAt>=SESSION_MS?'Tempo esgotado. Sessão encerrada.':'Sessão restaurada.');
  // Paciente escolhido será restaurado depois de carregar a lista do Supabase.
@@ -85,9 +86,9 @@ React.useEffect(()=>{
 },[session,startedAt]);
 React.useEffect(()=>{
  if(session&&startedAt!==null){
- try{localStorage.setItem(chaveSessao(userId),JSON.stringify({chosenId:chosen.id,startedAt,ended:sessaoEncerrada,msgs}));}catch{}
+ try{localStorage.setItem(chaveSessao(userId),JSON.stringify({chosenId:chosen.id,startedAt,ended:sessaoEncerrada,msgs,atendimentoId}));}catch{}
  }
-},[session,startedAt,chosen.id,sessaoEncerrada,msgs]);
+},[session,startedAt,chosen.id,sessaoEncerrada,msgs,atendimentoId]);
 React.useEffect(()=>{
  if(tempoEsgotado&&!ended){setEnded(true);setStatus('Os 30 minutos terminaram. Sessão encerrada. Solicite a avaliação.');setMostrarAjuda(false);}
 },[tempoEsgotado,ended]);
@@ -210,6 +211,7 @@ async function start() {
       setStatus('O servidor retornou um horário inválido.');
       return;
     }
+    setAtendimentoId(resultado.atendimento_id);
     setStartedAt(inicio);
     setAgora(Date.now());
     setStatus('Sessão de treinamento iniciada.');
@@ -248,14 +250,18 @@ function guidedReply(text:string,count:number){
 }
 async function send(){
   if(!input.trim()||busy||!session||sessaoEncerrada)return;
+  if(!atendimentoId){setStatus('Sessão antiga sem identificação. Não é possível enviar mensagens.');return;}
   const mensagem=input.trim();
   const next:Msg[]=[...msgs,{role:'user',content:mensagem}];
   setMsgs(next);setInput('');setBusy(true);setStatus('Paciente elaborando resposta...');
   try{
+    const {data:{session:authSession}}=await supabase.auth.getSession();
+    if(!authSession)throw new Error('Faça login novamente.');
     const response=await fetch('/.netlify/functions/gemini',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${authSession.access_token}`},
       body:JSON.stringify({
+        atendimento_id:atendimentoId,
         paciente:{nome:chosen.name,idade:chosen.age,titulo:chosen.topic,historia:chosen.background},
         mensagens:next.map(m=>({papel:m.role==='assistant'?'paciente':'aluno',texto:m.content}))
       })
