@@ -121,11 +121,14 @@ const { data: resultado, error: erroConsumo } = await banco.rpc(
       });
     }
 
-    return responder(200, {
-      autorizado: true,
-      duracao_minutos: 30,
-      mensagem: "Sessão autorizada."
-    });
+  return responder(200, {
+  autorizado: true,
+  atendimento_id: resultado[0].atendimento_id,
+  iniciado_em: resultado[0].iniciado_em,
+  termina_em: resultado[0].termina_em,
+  duracao_minutos: 30,
+  mensagem: "Sessão registrada com sucesso."
+});
   } catch (erro) {
     console.error("Falha ao iniciar sessão:", erro);
     return responder(500, {
