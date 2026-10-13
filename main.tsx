@@ -30,7 +30,7 @@ const chaveSessao=(userId:string)=>`${STORAGE_KEY}-${userId}`;
 type SessaoSalva={chosenId:string;startedAt:number;ended:boolean;msgs:Msg[];atendimentoId?:string};
 function lerSessao(userId:string):SessaoSalva|null{
  try{const raw=localStorage.getItem(chaveSessao(userId));if(!raw)return null;const s=JSON.parse(raw);
- if(typeof s.startedAt!=='number'||!Array.isArray(s.msgs)||typeof s.chosenId!=='string')return null;
+ if(typeof s.startedAt!=='number'||!Number.isFinite(s.startedAt)||!Array.isArray(s.msgs)||typeof s.chosenId!=='string'||typeof s.atendimentoId!=='string'||!/^[0-9a-f-]{36}$/i.test(s.atendimentoId))return null;
  return s as SessaoSalva;}catch{return null;}
 }
 function formatarTempo(ms:number){const seg=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(seg/60)).padStart(2,'0')}:${String(seg%60).padStart(2,'0')}`;}
@@ -64,19 +64,13 @@ const [ajuda,setAjuda]=useState('');
 const [carregandoAjuda,setCarregandoAjuda]=useState(false);
 const [mostrarAjuda,setMostrarAjuda]=useState(false);
 const [pacientesBanco, setPacientesBanco] = useState<PacienteBanco[]>([]);
+const [pacientesProntos,setPacientesProntos]=useState(false);
 const [startedAt,setStartedAt]=useState<number|null>(null);
 const [atendimentoId,setAtendimentoId]=useState<string|null>(null);
 const [agora,setAgora]=useState(Date.now());
 const restante=startedAt===null?SESSION_MS:Math.max(0,SESSION_MS-(agora-startedAt));
 const tempoEsgotado=Boolean(session&&startedAt!==null&&restante===0);
 const sessaoEncerrada=ended||tempoEsgotado;
-React.useEffect(()=>{
- const salvo=lerSessao(userId);if(!salvo)return;
- setStartedAt(salvo.startedAt);setAtendimentoId(salvo.atendimentoId||null);setMsgs(salvo.msgs);setSession(true);
- setEnded(salvo.ended||Date.now()-salvo.startedAt>=SESSION_MS);
- setStatus(salvo.ended?'Sessão encerrada.':Date.now()-salvo.startedAt>=SESSION_MS?'Tempo esgotado. Sessão encerrada.':'Sessão restaurada.');
- // Paciente escolhido será restaurado depois de carregar a lista do Supabase.
-},[]);
 React.useEffect(()=>{
  if(!session||startedAt===null)return;
  const atualizar=()=>setAgora(Date.now());atualizar();
@@ -85,10 +79,10 @@ React.useEffect(()=>{
  return()=>{window.clearInterval(intervalo);document.removeEventListener('visibilitychange',visibilidade);};
 },[session,startedAt]);
 React.useEffect(()=>{
- if(session&&startedAt!==null){
+ if(pacientesProntos&&session&&startedAt!==null&&atendimentoId){
  try{localStorage.setItem(chaveSessao(userId),JSON.stringify({chosenId:chosen.id,startedAt,ended:sessaoEncerrada,msgs,atendimentoId}));}catch{}
  }
-},[session,startedAt,chosen.id,sessaoEncerrada,msgs,atendimentoId]);
+},[pacientesProntos,session,startedAt,chosen.id,sessaoEncerrada,msgs,atendimentoId]);
 React.useEffect(()=>{
  if(tempoEsgotado&&!ended){setEnded(true);setStatus('Os 30 minutos terminaram. Sessão encerrada. Solicite a avaliação.');setMostrarAjuda(false);}
 },[tempoEsgotado,ended]);
@@ -99,7 +93,26 @@ const cases = pacientesBanco.length ? pacientesBanco.map(p => ({
 React.useEffect(() => {
   buscarPacientes().then((pacientes) => {
     setPacientesBanco(pacientes);
-    if(pacientes.length){const salvo=lerSessao(userId);const p=pacientes.find(p=>p.id===salvo?.chosenId)||pacientes[0];setChosen({id:p.id,name:p.nome_ficticio,age:p.idade,topic:p.area || 'Caso clínico',background:`Paciente fictício ${p.nome_ficticio}, ${p.idade} anos. Área temática: ${p.area}. Revele sua história gradualmente.`});}
+    if(pacientes.length){
+      const salvo=lerSessao(userId);
+      const pacienteSalvo=salvo?pacientes.find(p=>p.id===salvo.chosenId):undefined;
+      const p=pacienteSalvo||pacientes[0];
+      setChosen({id:p.id,name:p.nome_ficticio,age:p.idade,topic:p.area || 'Caso clínico',background:`Paciente fictício ${p.nome_ficticio}, ${p.idade} anos. Área temática: ${p.area}. Revele sua história gradualmente.`});
+      if(salvo&&pacienteSalvo){
+        setStartedAt(salvo.startedAt);
+        setAtendimentoId(salvo.atendimentoId||null);
+        setMsgs(salvo.msgs);
+        setSession(true);
+        setEnded(salvo.ended||Date.now()-salvo.startedAt>=SESSION_MS);
+        setStatus(salvo.ended?'Sessão encerrada.':Date.now()-salvo.startedAt>=SESSION_MS?'Tempo esgotado. Sessão encerrada.':'Sessão restaurada.');
+      }else{
+        try{localStorage.removeItem(chaveSessao(userId));}catch{}
+        setStatus('Pronto para iniciar');
+      }
+      setPacientesProntos(true);
+    }else{
+      setStatus('Não foi possível carregar os pacientes. Atualize a página.');
+    }
     console.log('Pacientes carregados:', pacientes.length);
   });
 }, []);
