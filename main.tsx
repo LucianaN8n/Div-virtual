@@ -25,11 +25,10 @@ async function buscarPacientes() {
 
 type Msg={role:'user'|'assistant',content:string};
 const SESSION_MS=30*60*1000;
-const STORAGE_KEY='diva-virtual-sessao-piloto-v2';
-const chaveSessao=(userId:string)=>`${STORAGE_KEY}-${userId}`;
+const STORAGE_KEY='diva-virtual-sessao-piloto-v1';
 type SessaoSalva={chosenId:string;startedAt:number;ended:boolean;msgs:Msg[]};
-function lerSessao(userId:string):SessaoSalva|null{
- try{const raw=localStorage.getItem(chaveSessao(userId));if(!raw)return null;const s=JSON.parse(raw);
+function lerSessao():SessaoSalva|null{
+ try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return null;const s=JSON.parse(raw);
  if(typeof s.startedAt!=='number'||!Array.isArray(s.msgs)||typeof s.chosenId!=='string')return null;
  return s as SessaoSalva;}catch{return null;}
 }
@@ -59,7 +58,7 @@ function formatarRelatorio(assessment:any,chosen:{name:string;age:number;topic:s
  return linhas.join('\r\n');
 }
 
-function App({userId,email}:{userId:string;email:string}){const[chosen,setChosen]=useState(casosDemonstracao[0]);const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const[assessment,setAssessment]=useState<any>(null);const[ended,setEnded]=useState(false);const[assessing,setAssessing]=useState(false);
+function App(){const[chosen,setChosen]=useState(casosDemonstracao[0]);const[msgs,setMsgs]=useState<Msg[]>([]);const[input,setInput]=useState('');const[busy,setBusy]=useState(false);const[status,setStatus]=useState('Pronto para iniciar');const[session,setSession]=useState(false);const[assessment,setAssessment]=useState<any>(null);const[ended,setEnded]=useState(false);const[assessing,setAssessing]=useState(false);
 const [ajuda,setAjuda]=useState('');
 const [carregandoAjuda,setCarregandoAjuda]=useState(false);
 const [mostrarAjuda,setMostrarAjuda]=useState(false);
@@ -70,7 +69,7 @@ const restante=startedAt===null?SESSION_MS:Math.max(0,SESSION_MS-(agora-startedA
 const tempoEsgotado=Boolean(session&&startedAt!==null&&restante===0);
 const sessaoEncerrada=ended||tempoEsgotado;
 React.useEffect(()=>{
- const salvo=lerSessao(userId);if(!salvo)return;
+ const salvo=lerSessao();if(!salvo)return;
  setStartedAt(salvo.startedAt);setMsgs(salvo.msgs);setSession(true);
  setEnded(salvo.ended||Date.now()-salvo.startedAt>=SESSION_MS);
  setStatus(salvo.ended?'Sessão encerrada.':Date.now()-salvo.startedAt>=SESSION_MS?'Tempo esgotado. Sessão encerrada.':'Sessão restaurada.');
@@ -85,7 +84,7 @@ React.useEffect(()=>{
 },[session,startedAt]);
 React.useEffect(()=>{
  if(session&&startedAt!==null){
- try{localStorage.setItem(chaveSessao(userId),JSON.stringify({chosenId:chosen.id,startedAt,ended:sessaoEncerrada,msgs}));}catch{}
+ try{localStorage.setItem(STORAGE_KEY,JSON.stringify({chosenId:chosen.id,startedAt,ended:sessaoEncerrada,msgs}));}catch{}
  }
 },[session,startedAt,chosen.id,sessaoEncerrada,msgs]);
 React.useEffect(()=>{
@@ -98,7 +97,7 @@ const cases = pacientesBanco.length ? pacientesBanco.map(p => ({
 React.useEffect(() => {
   buscarPacientes().then((pacientes) => {
     setPacientesBanco(pacientes);
-    if(pacientes.length){const salvo=lerSessao(userId);const p=pacientes.find(p=>p.id===salvo?.chosenId)||pacientes[0];setChosen({id:p.id,name:p.nome_ficticio,age:p.idade,topic:p.area || 'Caso clínico',background:`Paciente fictício ${p.nome_ficticio}, ${p.idade} anos. Área temática: ${p.area}. Revele sua história gradualmente.`});}
+    if(pacientes.length){const salvo=lerSessao();const p=pacientes.find(p=>p.id===salvo?.chosenId)||pacientes[0];setChosen({id:p.id,name:p.nome_ficticio,age:p.idade,topic:p.area || 'Caso clínico',background:`Paciente fictício ${p.nome_ficticio}, ${p.idade} anos. Área temática: ${p.area}. Revele sua história gradualmente.`});}
     console.log('Pacientes carregados:', pacientes.length);
   });
 }, []);
@@ -171,35 +170,7 @@ function historiaPaciente(nome:string, area:string):Historia {
   abertura:'Queria compreender por que sou tão duro comigo mesmo.'};
 }
 function aberturaPaciente(nome:string,area:string){const h=historiaPaciente(nome,area);return `Olá, meu nome é ${nome}. ${h.motivo} Não sei muito bem por onde começar, mas achei importante vir conversar.`}
-async function start(){if(session&&!ended&&!tempoEsgotado&&!window.confirm('Reiniciar a sessão atual? O histórico desta sessão será substituído.'))return;const { data: { session: authSession } } = await supabase.auth.getSession();
-
-if (!authSession) {
-  alert('Entre na sua conta para iniciar uma sessão.');
-  return;
-}
-
-try {
-const resposta = await fetch('/.netlify/functions/iniciar-sessao', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${authSession.access_token}`
-  },
-  body: JSON.stringify({
-    paciente_id: chosen.id
-  })
-});
-
-  const resultado = await resposta.json();
-
-  if (!resposta.ok || resultado.autorizado !== true) {
-    alert(resultado.erro || 'Não foi possível iniciar a sessão.');
-    return;
-  }
-} catch (erro) {
-  alert('Falha ao verificar sua assinatura. Tente novamente.');
-  return;
-}const inicio = new Date(resultado.iniciado_em).getTime();setStartedAt(inicio);setAgora(inicio);setStatus('Sessão de treinamento iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setEnded(false);setAjuda('');setMostrarAjuda(false);setSession(true)}
+function start(){if(session&&!ended&&!tempoEsgotado&&!window.confirm('Reiniciar a sessão atual? O histórico desta sessão será substituído.'))return;const inicio=Date.now();setStartedAt(inicio);setAgora(inicio);setStatus('Sessão de treinamento iniciada.');setMsgs([{role:'assistant',content:aberturaPaciente(chosen.name,chosen.topic)}]);setAssessment(null);setEnded(false);setAjuda('');setMostrarAjuda(false);setSession(true)}
 function guidedReply(text:string,count:number){
  const t=text.toLocaleLowerCase('pt-BR');const h=historiaPaciente(chosen.name,chosen.topic);
  if(/suic|me matar|automutil|tirar minha vida|risco imediato/.test(t))return 'É difícil falar disso. [Orientação pedagógica: interrompa a simulação para avaliar risco, priorizar segurança e procurar supervisão e serviços humanos apropriados. Este simulador não atende emergências.]';
@@ -302,75 +273,5 @@ function download(){
  a.download=`diva-virtual-avaliacao-${chosen.name.toLowerCase().replace(/[^a-z0-9]/g,'-')}.txt`;
  document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual <span>2.0</span></h1><p>Laboratório de Prática Clínica Simulada</p></div></header><div className="warning">Versão piloto de treinamento. Não utilize dados de pacientes reais. A avaliação exibida é apenas demonstrativa e não vale como nota acadêmica.</div><section className="layout"><aside className="panel"><h2>Seu treinamento</h2><p className="muted" style={{overflowWrap:"anywhere"}}>Conta: {email}</p><button type="button" onClick={()=>supabase.auth.signOut()} style={{marginBottom:12}}>Sair da conta</button><label>Caso clínico</label><select value={chosen.id} disabled={session} onChange={e=>setChosen(cases.find(c=>c.id===e.target.value) || cases[0])}>{cases.map(c=><option key={c.id} value={c.id}>{c.topic} — {c.name}</option>)}</select><p className="muted">Paciente fictício: {chosen.name}, {chosen.age} anos</p><p className="status">{status}</p>{session&&<div style={{margin:'12px 0',padding:14,border:'1px solid #cfa958',borderRadius:10,background:'#142b49'}}><div style={{fontWeight:700,color:'#e6bd67'}}>Tempo da sessão</div><div role="timer" aria-live="off" style={{fontSize:30,fontWeight:700,letterSpacing:2,color:restante<=5*60*1000?'#ffbf88':'#f1f5fb'}}>{formatarTempo(restante)}</div><small style={{color:'#cbd5e1'}}>{sessaoEncerrada?'Sessão encerrada':restante<=5*60*1000?'Atenção: faltam menos de 5 minutos.':'30 minutos corridos, sem pausa.'}</small></div>}<button className="gold" onClick={start}>{session?'Reiniciar sessão':'Iniciar sessão'}</button><div className="separator"/><h3>Privacidade</h3><p className="muted">As mensagens da simulação e os pedidos de ajuda são processados por IA. Não utilize dados de pessoas reais. O acesso exige conta cadastrada. Nesta versão de testes ainda não há validação de assinatura, créditos nem registro oficial de notas. O cronômetro funciona neste navegador e ainda não possui validação no servidor.</p></aside><section className="panel chat"><div className="chathead"><div><h2>Consultório simulado</h2><p className="muted">{chosen.name} · {chosen.topic}</p></div></div><div className="messages">{!session?<div className="empty">Escolha um caso e clique em “Iniciar sessão” para começar a prática.</div>:msgs.map((m,i)=><div className={'bubble '+(m.role==='user'?'mine':'patient')} key={i}><small>{m.role==='user'?'Terapeuta (aluno)':chosen.name}</small>{m.content}</div>)}{busy&&<p className="muted">Paciente elaborando resposta...</p>}</div><div className="composer"><textarea placeholder="Escreva sua intervenção clínica..." value={input} disabled={!session||sessaoEncerrada||busy} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}/><button className="gold" onClick={send} disabled={!session||sessaoEncerrada||busy||!input.trim()}>Enviar</button></div>{session&&!sessaoEncerrada&&<div style={{marginTop:12,marginBottom:12}}><button type="button" onClick={pedirAjuda} disabled={busy||carregandoAjuda} style={{border:'1px solid #cfa958',borderRadius:9,padding:'11px 16px',color:'#f1d18b',background:'#162d4b',cursor:'pointer'}}>💡 {carregandoAjuda?'Preparando orientação...':mostrarAjuda?'Fechar ajuda':'Preciso de ajuda'}</button>{mostrarAjuda&&<div style={{marginTop:12,padding:18,border:'1px solid #a98b51',borderRadius:12,background:'#142b49',color:'#f1f5fb',whiteSpace:'pre-wrap',lineHeight:1.65}}><strong style={{color:'#e6bd67'}}>Orientação ao aluno — não enviada à paciente</strong><div style={{marginTop:10}}>{carregandoAjuda?'Analisando o momento da conversa...':ajuda}</div></div>}</div>}<div className="footer"><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button onClick={encerrarSessao} disabled={!session||sessaoEncerrada||busy||assessing} style={{border:"1px solid #cfa958",color:"#e6bd67"}}>Encerrar sessão</button><button onClick={evaluate} disabled={!session||busy||assessing||msgs.filter(m=>m.role==='user').length===0}>{assessing?"Analisando...":"Analisar atendimento"}</button></div><span className="muted">Pressione Enter para enviar</span></div></section></section>{assessment&&<section className="panel result"><h2>Análise pedagógica do atendimento</h2><p className="warning">Avaliação formativa produzida por IA. As notas são estimativas justificadas, não uma avaliação clínica validada nem nota oficial.</p><div className="score">{Number(assessment.notaGeral||0).toFixed(1)} <small>/ 10</small></div><p style={{whiteSpace:'pre-wrap'}}>{assessment.resumo}</p><div className="metrics">{assessment.criterios.map((c:any,i:number)=><div key={i}><span>{c.nome}</span><strong>{Number(c.nota||0).toFixed(1)}</strong></div>)}</div>{assessment.criterios.map((c:any,i:number)=><div key={i} style={{marginTop:18,padding:16,background:'#142b49',borderRadius:10,border:'1px solid #35506b'}}><h3 style={{color:'#e6bd67'}}>{c.nome} — {Number(c.nota||0).toFixed(1)}/10</h3><p><strong>Por que recebeu essa nota:</strong> {c.justificativa}</p><p><strong>O que fez bem:</strong> {c.acerto}</p><p><strong>O que poderia melhorar:</strong> {c.melhoria}</p>{c.exemplo&&<p><strong>Exemplo de intervenção:</strong> “{c.exemplo}”</p>}</div>)}<h3 style={{marginTop:20}}>Próximos passos</h3><p style={{whiteSpace:'pre-wrap'}}>{assessment.proximosPassos}</p><button onClick={download}>Baixar relatório e transcrição (TXT)</button></section>}<footer>Instituto Saber Consciente · Protótipo educacional com pacientes fictícios · Não é atendimento clínico real</footer></main>}
-function Acesso(){
- const [usuario,setUsuario]=useState<{id:string;email:string}|null>(null);
- const [verificando,setVerificando]=useState(true);
- const [modo,setModo]=useState<'entrar'|'cadastrar'|'recuperar'|'nova-senha'>('entrar');
- const [email,setEmail]=useState('');
- const [senha,setSenha]=useState('');
- const [aguardando,setAguardando]=useState(false);
- const [aviso,setAviso]=useState('');
- React.useEffect(()=>{
-  let ativo=true;
-  supabase.auth.getSession().then(({data,error})=>{
-   if(!ativo)return;
-   if(error)setAviso('Não foi possível verificar sua conta. Tente atualizar a página.');
-   setUsuario(data.session?.user?{id:data.session.user.id,email:data.session.user.email||''}:null);
-   setVerificando(false);
-  }).catch(()=>{if(ativo){setAviso('Falha ao conectar ao serviço de login.');setVerificando(false);}});
-  const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
-   if(!ativo)return;
-   if(_event==='PASSWORD_RECOVERY'){setModo('nova-senha');setUsuario(null);setAviso('Crie uma nova senha para sua conta.');return;}
-   setUsuario(session?.user?{id:session.user.id,email:session.user.email||''}:null);
-  });
-  return()=>{ativo=false;subscription.unsubscribe();};
- },[]);
- async function enviar(e:React.FormEvent){
-  e.preventDefault();if(aguardando)return;
-  setAguardando(true);setAviso('');
-  try{
-   if(modo==='nova-senha'){
-    const {error}=await supabase.auth.updateUser({password:senha});
-    if(error)throw error;
-    setAviso('Senha alterada. Você já pode acessar sua conta.');
-    setModo('entrar');
-    await supabase.auth.signOut();
-   }else if(modo==='cadastrar'){
-    const {data,error}=await supabase.auth.signUp({email:email.trim(),password:senha,options:{emailRedirectTo:window.location.origin}});
-    if(error)throw error;
-    setAviso(data.session?'Cadastro realizado.':'Cadastro solicitado! Confira seu e-mail e clique no link de confirmação. Depois volte para entrar.');
-    if(!data.session)setModo('entrar');
-   }else if(modo==='recuperar'){
-    const {error}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin});
-    if(error)throw error;
-    setAviso('Se o e-mail estiver cadastrado, você receberá as instruções para recuperar a senha.');
-   }else{
-    const {error}=await supabase.auth.signInWithPassword({email:email.trim(),password:senha});
-    if(error)throw error;
-   }
-  }catch(err){
-   const msg=err instanceof Error?err.message:'Erro desconhecido';
-   setAviso(msg.includes('Invalid login credentials')?'E-mail ou senha incorretos.':msg.includes('Email not confirmed')?'Confirme o e-mail antes de entrar.':msg);
-  }finally{setAguardando(false);}
- }
- if(verificando)return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual</h1></div></header><section className="panel" style={{maxWidth:500,margin:'32px auto'}}>Verificando acesso...</section></main>;
- if(usuario)return <App key={usuario.id} userId={usuario.id} email={usuario.email}/>;
- return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual <span>2.0</span></h1><p>Laboratório de Prática Clínica Simulada</p></div></header>
- <section className="panel" style={{maxWidth:480,margin:'42px auto',padding:28}}>
- <h2>{modo==='entrar'?'Acessar minha conta':modo==='cadastrar'?'Criar minha conta':modo==='nova-senha'?'Definir nova senha':'Recuperar senha'}</h2>
- <p className="muted">Use seu e-mail para acessar o ambiente de treinamento.</p>
- <form onSubmit={enviar} style={{display:'grid',gap:14,marginTop:22}}>
- {modo!=='nova-senha'&&<><label htmlFor="email-acesso">E-mail</label><input id="email-acesso" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} style={{width:'100%',boxSizing:'border-box',padding:12,borderRadius:8}}/></>}
- {modo!=='recuperar'&&<><label htmlFor="senha-acesso">Senha (mínimo de 8 caracteres)</label><input id="senha-acesso" type="password" autoComplete={modo==='cadastrar'||modo==='nova-senha'?'new-password':'current-password'} minLength={modo==='cadastrar'||modo==='nova-senha'?8:1} required value={senha} onChange={e=>setSenha(e.target.value)} style={{width:'100%',boxSizing:'border-box',padding:12,borderRadius:8}}/></>}
- <button className="gold" type="submit" disabled={aguardando}>{aguardando?'Aguarde...':modo==='entrar'?'Entrar':modo==='cadastrar'?'Cadastrar':modo==='nova-senha'?'Salvar nova senha':'Enviar instruções'}</button>
- </form>
- {aviso&&<p role="status" style={{marginTop:16,whiteSpace:'pre-wrap'}}>{aviso}</p>}
- <div style={{display:'flex',flexWrap:'wrap',gap:12,marginTop:20}}>
- {modo!=='entrar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('entrar');setAviso('')}}>Já tenho conta</button>}
- {modo!=='cadastrar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('cadastrar');setAviso('')}}>Criar conta</button>}
- {modo!=='recuperar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('recuperar');setAviso('')}}>Esqueci minha senha</button>}
- </div><p className="muted" style={{marginTop:22}}>Versão de testes. O cadastro ainda não verifica pagamentos da Hotmart nem limita sessões por plano.</p>
- </section><footer>Instituto Saber Consciente · Ambiente de simulação educacional</footer></main>;
-}
-createRoot(document.getElementById('root')!).render(<Acesso/>);
+return <main><header><div className="logo">✦</div><div><div className="eyebrow">INSTITUTO SABER CONSCIENTE</div><h1>Divã Virtual <span>2.0</span></h1><p>Laboratório de Prática Clínica Simulada</p></div></header><div className="warning">Versão piloto de treinamento. Não utilize dados de pacientes reais. A avaliação exibida é apenas demonstrativa e não vale como nota acadêmica.</div><section className="layout"><aside className="panel"><h2>Seu treinamento</h2><label>Caso clínico</label><select value={chosen.id} disabled={session} onChange={e=>setChosen(cases.find(c=>c.id===e.target.value) || cases[0])}>{cases.map(c=><option key={c.id} value={c.id}>{c.topic} — {c.name}</option>)}</select><p className="muted">Paciente fictício: {chosen.name}, {chosen.age} anos</p><p className="status">{status}</p>{session&&<div style={{margin:'12px 0',padding:14,border:'1px solid #cfa958',borderRadius:10,background:'#142b49'}}><div style={{fontWeight:700,color:'#e6bd67'}}>Tempo da sessão</div><div role="timer" aria-live="off" style={{fontSize:30,fontWeight:700,letterSpacing:2,color:restante<=5*60*1000?'#ffbf88':'#f1f5fb'}}>{formatarTempo(restante)}</div><small style={{color:'#cbd5e1'}}>{sessaoEncerrada?'Sessão encerrada':restante<=5*60*1000?'Atenção: faltam menos de 5 minutos.':'30 minutos corridos, sem pausa.'}</small></div><button className="gold" onClick={start}>{session?'Reiniciar sessão':'Iniciar sessão'}</button><div className="separator"/><h3>Privacidade</h3><p className="muted">As mensagens da simulação e os pedidos de ajuda são processados por IA. Não utilize dados de pessoas reais. Nesta versão de testes não há login, créditos nem registro oficial de notas. O cronômetro funciona neste navegador e ainda não possui validação no servidor.</p></aside><section className="panel chat"><div className="chathead"><div><h2>Consultório simulado</h2><p className="muted">{chosen.name} · {chosen.topic}</p></div></div><div className="messages">{!session?<div className="empty">Escolha um caso e clique em “Iniciar sessão” para começar a prática.</div>:msgs.map((m,i)=><div className={'bubble '+(m.role==='user'?'mine':'patient')} key={i}><small>{m.role==='user'?'Terapeuta (aluno)':chosen.name}</small>{m.content}</div>)}{busy&&<p className="muted">Paciente elaborando resposta...</p>}</div><div className="composer"><textarea placeholder="Escreva sua intervenção clínica..." value={input} disabled={!session||sessaoEncerrada||busy} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}/><button className="gold" onClick={send} disabled={!session||sessaoEncerrada||busy||!input.trim()}>Enviar</button></div>{session&&!sessaoEncerrada&&<div style={{marginTop:12,marginBottom:12}}><button type="button" onClick={pedirAjuda} disabled={busy||carregandoAjuda} style={{border:'1px solid #cfa958',borderRadius:9,padding:'11px 16px',color:'#f1d18b',background:'#162d4b',cursor:'pointer'}}>💡 {carregandoAjuda?'Preparando orientação...':mostrarAjuda?'Fechar ajuda':'Preciso de ajuda'}</button>{mostrarAjuda&&<div style={{marginTop:12,padding:18,border:'1px solid #a98b51',borderRadius:12,background:'#142b49',color:'#f1f5fb',whiteSpace:'pre-wrap',lineHeight:1.65}}><strong style={{color:'#e6bd67'}}>Orientação ao aluno — não enviada à paciente</strong><div style={{marginTop:10}}>{carregandoAjuda?'Analisando o momento da conversa...':ajuda}</div></div>}</div>}<div className="footer"><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button onClick={encerrarSessao} disabled={!session||sessaoEncerrada||busy||assessing} style={{border:"1px solid #cfa958",color:"#e6bd67"}}>Encerrar sessão</button><button onClick={evaluate} disabled={!session||busy||assessing||msgs.filter(m=>m.role==='user').length===0}>{assessing?"Analisando...":"Analisar atendimento"}</button></div><span className="muted">Pressione Enter para enviar</span></div></section></section>{assessment&&<section className="panel result"><h2>Análise pedagógica do atendimento</h2><p className="warning">Avaliação formativa produzida por IA. As notas são estimativas justificadas, não uma avaliação clínica validada nem nota oficial.</p><div className="score">{Number(assessment.notaGeral||0).toFixed(1)} <small>/ 10</small></div><p style={{whiteSpace:'pre-wrap'}}>{assessment.resumo}</p><div className="metrics">{assessment.criterios.map((c:any,i:number)=><div key={i}><span>{c.nome}</span><strong>{Number(c.nota||0).toFixed(1)}</strong></div>)}</div>{assessment.criterios.map((c:any,i:number)=><div key={i} style={{marginTop:18,padding:16,background:'#142b49',borderRadius:10,border:'1px solid #35506b'}}><h3 style={{color:'#e6bd67'}}>{c.nome} — {Number(c.nota||0).toFixed(1)}/10</h3><p><strong>Por que recebeu essa nota:</strong> {c.justificativa}</p><p><strong>O que fez bem:</strong> {c.acerto}</p><p><strong>O que poderia melhorar:</strong> {c.melhoria}</p>{c.exemplo&&<p><strong>Exemplo de intervenção:</strong> “{c.exemplo}”</p>}</div>)}<h3 style={{marginTop:20}}>Próximos passos</h3><p style={{whiteSpace:'pre-wrap'}}>{assessment.proximosPassos}</p><button onClick={download}>Baixar relatório e transcrição (TXT)</button></section>}<footer>Instituto Saber Consciente · Protótipo educacional com pacientes fictícios · Não é atendimento clínico real</footer></main>}
+createRoot(document.getElementById('root')!).render(<App/>);
