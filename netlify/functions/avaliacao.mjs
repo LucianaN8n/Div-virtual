@@ -40,6 +40,18 @@ export default async (request) => {
       !Number.isFinite(Date.parse(atendimento.iniciado_em))) {
       return Response.json({ error: 'Atendimento inexistente ou não autorizado.' }, { status: 403 });
     }
+    // Uma avaliação já registrada é devolvida sem nova chamada à IA.
+    const { data: avaliacaoAnterior, error: erroAnterior } = await banco.from('avaliacoes')
+      .select('criterios')
+      .eq('atendimento_id', atendimento_id)
+      .maybeSingle();
+    if (erroAnterior) {
+      console.error('Erro ao consultar avaliação anterior:', erroAnterior.message);
+      return Response.json({ error: 'Não foi possível consultar a avaliação salva.' }, { status: 500 });
+    }
+    if (avaliacaoAnterior?.criterios?.criterios) {
+      return Response.json({ avaliacao: avaliacaoAnterior.criterios });
+    }
     const { data: perfil, error: erroPerfil } = await banco
       .from('pacientes')
       .select('nome_ficticio, idade, area')
