@@ -508,7 +508,25 @@ function Acesso(){
  {modo!=='entrar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('entrar');setAviso('')}}>Já tenho conta</button>}
  {modo!=='cadastrar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('cadastrar');setAviso('')}}>Criar conta</button>}
  {modo!=='recuperar'&&modo!=='nova-senha'&&<button type="button" onClick={()=>{setModo('recuperar');setAviso('')}}>Esqueci minha senha</button>}
- </div><p className="muted" style={{marginTop:22}}>Versão de testes. O cadastro ainda não verifica pagamentos da Hotmart nem limita sessões por plano.</p>
- </section><footer>Instituto Saber Consciente · Ambiente de simulação educacional</footer></main>;
+ </div><p className="muted" style={{marginTop:22}}>Para iniciar atendimentos, é necessário ter uma assinatura ativa e sessões disponíveis. O acesso às sessões é validado pelo servidor.</p>
+ </section>
+ {modo!=='nova-senha'&&<section className="panel" style={{maxWidth:820,margin:'22px auto',padding:28}}>
+ <h2 style={{textAlign:'center'}}>Escolha seu plano de treinamento</h2>
+ <p className="muted" style={{textAlign:'center'}}>Sessões de 30 minutos com pacientes fictícios e avaliação pedagógica por IA. Sessões não utilizadas acumulam nas renovações enquanto a assinatura permanecer válida.</p>
+ <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:18,marginTop:22}}>
+ <div style={{padding:22,border:'1px solid #35506b',borderRadius:12}}>
+ <h3>Essencial</h3><p style={{fontSize:25,fontWeight:700,color:'#e6bd67'}}>R$ 29,90 <small style={{fontSize:14}}> / mês</small></p>
+ <p>3 sessões por mês</p>
+ <a className="gold" href="https://pay.hotmart.com/W108003231F?off=dd0n33hc" target="_blank" rel="noopener noreferrer" style={{display:'inline-block',padding:'12px 18px',borderRadius:8,textDecoration:'none',marginTop:12}}>Assinar Essencial</a>
+ </div>
+ <div style={{padding:22,border:'1px solid #e6bd67',borderRadius:12}}>
+ <h3>Profissional</h3><p style={{fontSize:25,fontWeight:700,color:'#e6bd67'}}>R$ 49,90 <small style={{fontSize:14}}> / mês</small></p>
+ <p>10 sessões por mês</p>
+ <a className="gold" href="https://pay.hotmart.com/W108003231F?off=i9vhdkip" target="_blank" rel="noopener noreferrer" style={{display:'inline-block',padding:'12px 18px',borderRadius:8,textDecoration:'none',marginTop:12}}>Assinar Profissional</a>
+ </div>
+ </div>
+ <p className="muted" style={{marginTop:18}}>Após a aprovação do pagamento, entre com o mesmo e-mail usado na compra. A liberação depende da confirmação da Hotmart. Não utilize dados de pacientes reais.</p>
+ </section>}
+ <footer>Instituto Saber Consciente · Ambiente de simulação educacional</footer></main>;
 }
 createRoot(document.getElementById('root')!).render(<Acesso/>);
