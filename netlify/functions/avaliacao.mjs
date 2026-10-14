@@ -20,7 +20,7 @@ export default async (request) => {
       return Response.json({ error: 'Login inválido ou expirado.' }, { status: 401 });
     }
     const corpo = await request.json().catch(() => ({}));
-    const { mensagens, atendimento_id } = corpo;
+    const { atendimento_id } = corpo;
     if (typeof atendimento_id !== 'string' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atendimento_id)) {
       return Response.json({ error: 'Atendimento não autorizado.' }, { status: 403 });
@@ -61,7 +61,22 @@ export default async (request) => {
       return Response.json({ error: 'Não foi possível carregar o paciente.' }, { status: 500 });
     }
     const paciente = { nome: perfil.nome_ficticio, idade: perfil.idade, titulo: perfil.area };
-    if (!paciente || !Array.isArray(mensagens) || mensagens.length < 2 || mensagens.length > 120 || !mensagens.some(m => m.papel === 'aluno')) {
+    // A avaliação usa somente mensagens persistidas do atendimento autenticado.
+    const { data: mensagens, error: erroMensagens } = await banco
+      .from('mensagens')
+      .select('papel, texto, criado_em, id')
+      .eq('atendimento_id', atendimento_id)
+      .order('criado_em', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(501);
+    if (erroMensagens) {
+      console.error('Erro ao recuperar transcrição:', erroMensagens.message);
+      return Response.json({ error: 'Não foi possível carregar a transcrição salva.' }, { status: 500 });
+    }
+    if (mensagens?.length > 500) {
+      return Response.json({ error: 'A transcrição ultrapassou o limite de avaliação.' }, { status: 400 });
+    }
+    if (!paciente || !Array.isArray(mensagens) || mensagens.length < 2 || !mensagens.some(m => m.papel === 'aluno')) {
       return Response.json({ error: 'Sessão inválida ou sem intervenções do aluno.' }, { status: 400 });
     }
     const transcricao = mensagens.slice(-80).map(m => `${m.papel === 'paciente' ? 'PACIENTE' : 'ALUNO'}: ${String(m.texto || '').slice(0, 1400)}`).join('\n');
