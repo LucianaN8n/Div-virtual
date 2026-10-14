@@ -46,6 +46,11 @@ console.log("Diagnóstico Hotmart:", {
   possuiTransacao: Boolean(dados.purchase?.transaction)
 });
   if (produtoId !== PRODUTO_ID) {
+    console.info("Evento Hotmart ignorado: produto diferente", {
+      evento: evento.event,
+      produtoId,
+      esperado: PRODUTO_ID
+    });
     return Response.json({ ignorado: true, motivo: "Outro produto" });
   }
 
@@ -53,9 +58,10 @@ console.log("Diagnóstico Hotmart:", {
   const eventoId = evento.id;
   const planoId = String(dados.subscription?.plan?.id ?? "");
   const plano = PLANOS[planoId];
-  const email = dados.buyer?.email?.trim().toLowerCase();
+  const emailBruto = dados.buyer?.email ?? dados.subscription?.user?.email ?? dados.subscription?.subscriber?.email;
+  const email = typeof emailBruto === "string" ? emailBruto.trim().toLowerCase() : null;
   const transacao = dados.purchase?.transaction;
-  const assinaturaCodigo = dados.subscription?.subscriber?.code;
+  const assinaturaCodigo = dados.subscription?.subscriber_code ?? dados.subscription?.subscriber?.code;
 const dataVencimento = dados.subscription?.date_next_charge ?? dados.purchase?.date_next_charge ?? null;
 console.log("Campo de vencimento presente:", Boolean(dataVencimento));
   if (!eventoId || !tipo) {
