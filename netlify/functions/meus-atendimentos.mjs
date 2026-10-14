@@ -55,6 +55,7 @@ export default async function handler(request) {
           .select("id, papel, texto, criado_em")
           .eq("atendimento_id", attendance.id)
           .order("criado_em", { ascending: true })
+          .order("papel", { ascending: true })
           .order("id", { ascending: true })
           .limit(500),
         db.from("pacientes")
