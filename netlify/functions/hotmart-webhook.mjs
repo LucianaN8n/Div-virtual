@@ -46,12 +46,22 @@ console.log("Diagnóstico Hotmart:", {
   possuiTransacao: Boolean(dados.purchase?.transaction)
 });
   if (produtoId !== PRODUTO_ID) {
-    console.info("Evento Hotmart ignorado: produto diferente", {
+    const testeHotmart = produtoId === "0";
+    console.info("Evento Hotmart não aplicado", {
       evento: evento.event,
       produtoId,
-      esperado: PRODUTO_ID
+      esperado: PRODUTO_ID,
+      motivo: testeHotmart ? "Payload de teste da Hotmart" : "Outro produto"
     });
-    return Response.json({ ignorado: true, motivo: "Outro produto" });
+    // Não registrar, liberar créditos ou alterar assinaturas para
+    // produtos desconhecidos. A resposta deixa explícito o descarte.
+    return Response.json({
+      recebido: true,
+      aplicado: false,
+      motivo: testeHotmart
+        ? "Teste Hotmart: produto 0, sem alteração de assinatura"
+        : "Produto diferente do Divã Virtual"
+    });
   }
 
   const tipo = evento.event;
