@@ -38,7 +38,7 @@ export default async function handler(request) {
     const attendanceId = params.get("atendimento_id");
 
     if (attendanceId !== null) {
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attendanceId)) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attendanceId)) {
         return json(400, { error: "Identificação de atendimento inválida." });
       }
       const { data: attendance, error: attendanceError } = await db
