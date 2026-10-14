@@ -22,7 +22,7 @@ export default async (request) => {
     const corpo = await request.json().catch(() => ({}));
     const { atendimento_id } = corpo;
     if (typeof atendimento_id !== 'string' ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atendimento_id)) {
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(atendimento_id)) {
       return Response.json({ error: 'Atendimento não autorizado.' }, { status: 403 });
     }
     const banco = createClient(url, secreta, { auth: { persistSession: false, autoRefreshToken: false } });
