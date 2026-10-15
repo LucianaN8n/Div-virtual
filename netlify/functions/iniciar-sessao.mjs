@@ -62,6 +62,36 @@ export default async function handler(request) {
       }
     });
 
+    // Uma sessão já iniciada pertence ao aluno e pode ser retomada sem novo débito.
+    // Consultar antes de exigir créditos disponíveis: o crédito da sessão já foi consumido.
+    const { data: sessoesAtivas, error: erroSessaoAtiva } = await banco
+      .from("atendimentos")
+      .select("id, paciente_id, iniciado_em")
+      .eq("aluno_id", usuario.user.id)
+      .eq("status", "iniciado")
+      .gt("iniciado_em", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+      .order("iniciado_em", { ascending: false })
+      .limit(1);
+
+    if (erroSessaoAtiva) {
+      console.error("Erro ao verificar sessão existente:", erroSessaoAtiva.message);
+      return responder(500, { erro: "Não foi possível verificar a sessão em andamento." });
+    }
+
+    if (sessoesAtivas?.length) {
+      const existente = sessoesAtivas[0];
+      return responder(200, {
+        autorizado: true,
+        retomada: true,
+        atendimento_id: existente.id,
+        paciente_id: existente.paciente_id,
+        iniciado_em: existente.iniciado_em,
+        termina_em: new Date(new Date(existente.iniciado_em).getTime() + 30 * 60 * 1000).toISOString(),
+        duracao_minutos: 30,
+        mensagem: "Sessão existente retomada sem consumir outro crédito."
+      });
+    }
+
     const { data: assinaturas, error: erroConsulta } = await banco
       .from("assinaturas")
       .select("id, status, data_vencimento, sessoes_disponiveis")
