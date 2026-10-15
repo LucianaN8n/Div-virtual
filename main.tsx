@@ -313,6 +313,36 @@ async function start() {
       setStatus('O servidor retornou um horário inválido.');
       return;
     }
+    if (resultado.retomada === true) {
+      const casoExistente = cases.find(c => c.id === resultado.paciente_id);
+      if (!casoExistente) {
+        setStatus('Existe uma sessão em andamento com outro paciente. Atualize a página e consulte Meus atendimentos.');
+        return;
+      }
+      const historicoResposta = await fetch('/.netlify/functions/meus-atendimentos?atendimento_id=' + encodeURIComponent(resultado.atendimento_id), {
+        headers: { Authorization: 'Bearer ' + authSession.access_token }
+      });
+      if (!historicoResposta.ok) {
+        setStatus('Sessão existente localizada, mas não foi possível recuperar as mensagens. Nenhum crédito adicional foi consumido.');
+        return;
+      }
+      const detalhe = await historicoResposta.json();
+      const mensagensRecuperadas: Msg[] = mensagensComAbertura(detalhe)
+        .filter((m:any) => m.papel === 'aluno' || m.papel === 'paciente')
+        .map((m:any) => ({ role: m.papel === 'aluno' ? 'user' : 'assistant', content: String(m.texto || '') }));
+      setChosen(casoExistente);
+      setAtendimentoId(resultado.atendimento_id);
+      setStartedAt(inicio);
+      setAgora(Date.now());
+      setMsgs(mensagensRecuperadas);
+      setAssessment(null);
+      setEnded(false);
+      setAjuda('');
+      setMostrarAjuda(false);
+      setSession(true);
+      setStatus('Sessão em andamento recuperada, sem consumir outro crédito.');
+      return;
+    }
     setAtendimentoId(resultado.atendimento_id);
     setStartedAt(inicio);
     setAgora(Date.now());
