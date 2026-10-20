@@ -96,7 +96,7 @@ export default async function handler(request) {
       .from("assinaturas")
       .select("id, status, data_vencimento, sessoes_disponiveis")
       .eq("email", email)
-      .eq("status", "ativa")
+      .in("status", ["ativa", "cancelada"])
       .gt("data_vencimento", new Date().toISOString())
       .gt("sessoes_disponiveis", 0)
       .order("created_at", { ascending: false })
