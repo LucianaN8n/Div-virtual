@@ -72,7 +72,20 @@ console.log("Diagnóstico Hotmart:", {
   const email = typeof emailBruto === "string" ? emailBruto.trim().toLowerCase() : null;
   const transacao = dados.purchase?.transaction;
   const assinaturaCodigo = dados.subscription?.subscriber_code ?? dados.subscription?.subscriber?.code;
-const dataVencimento = dados.subscription?.date_next_charge ?? dados.purchase?.date_next_charge ?? null;
+const vencimentoBruto = dados.subscription?.date_next_charge ?? dados.purchase?.date_next_charge ?? null;
+let dataVencimento = null;
+if (vencimentoBruto !== null && vencimentoBruto !== undefined && vencimentoBruto !== "") {
+  const numero = typeof vencimentoBruto === "number" ? vencimentoBruto : Number(vencimentoBruto);
+  const data = Number.isFinite(numero)
+    ? new Date(numero < 1e11 ? numero * 1000 : numero)
+    : new Date(vencimentoBruto);
+  if (!Number.isNaN(data.getTime())) {
+    dataVencimento = data.toISOString();
+  } else {
+    console.error("Data de vencimento Hotmart inválida", { eventoId });
+    return new Response("Data de vencimento inválida", { status: 422 });
+  }
+}
 console.log("Campo de vencimento presente:", Boolean(dataVencimento));
   if (!eventoId || !tipo) {
     return new Response("Evento sem identificação", { status: 422 });
